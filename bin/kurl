@@ -60,6 +60,13 @@ if args['data-json']
     j = j.split ':'
     unless /^\".*\"$/.test(j[0])
       j[0] = '"' + j[0] + '"'
+    if ["true", "false"].indexOf(j[1].toLowerCase()) isnt -1
+      j[1] = (j[1].toLowerCase is "true")
+    else if /^[0-9]*\.?[0-9]+$/.test j[1]
+      j[1] = Number(j[1])
+    else
+      j[1] = j[1].replace /^[\'\"](.*)[\'\"]$/, '$1'
+      j[1] = '"' + j[1] + '"'
     j = j.join ':'
     unless /^{.*}$/.test(j)
       j = '{' + j + '}'
