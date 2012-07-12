@@ -1,0 +1,87 @@
+#!/usr/bin/env coffee
+
+exec = (require 'child_process').exec
+url = require 'url'
+querystring = require 'querystring'
+args =
+  (require '../node_modules/optimist')
+  .options('query',
+    describe: 'Add query parameter'
+  )
+  .options('json',
+    describe: 'Add property to the JSON request payload'
+  )
+  .argv
+
+console.log args
+
+format_arg_key = (key) ->
+  if key.length is 1
+    return key
+  return '-' + key
+
+format_arg = (arg) ->
+  arg.replace /&/g , '\\$&'
+
+extend = (object, properties) ->
+  for key, val of properties
+    object[key] = val
+  object
+
+type = (obj) ->
+  if obj is null or obj is undefined
+    return String(obj)
+  Object.prototype.toString.call(obj).slice(8, -1).toLowerCase() || 'object'
+
+addslashes = (str) ->
+  str.replace(/[\\\"\']/g, '\\$&').replace(/\u0000/g, '\\0')
+
+isNumber = (n) ->
+  not (isNaN parseFloat n) and (isFinite n)
+
+if args._.length
+  args.url = args._.join()
+  delete args._
+if args.query
+  url_data = url.parse args.url, true
+  unless type(args.query) is 'array'
+    args.query = [args.query]
+  for q in args.query
+    q = querystring.parse q
+    extend url_data.query, q
+  args.url = url.format url_data
+  delete args.query
+if args['data-json']
+  console.error 'json and data-binary cannot be used at the same time'  unless type(args['data-binary']) is 'undefined'
+  args['data-binary'] = {}
+  unless type(args['data-json']) is 'array'
+    args['data-json'] = [args['data-json']]
+  for j in args['data-json']
+    j = j.split ':'
+    unless /^\".*\"$/.test(j[0])
+      j[0] = '"' + j[0] + '"'
+    j = j.join ':'
+    unless /^{.*}$/.test(j)
+      j = '{' + j + '}'
+    j = JSON.parse j
+    extend args['data-binary'], j
+  args['data-binary'] = '"' + addslashes(JSON.stringify args['data-binary']) + '"'
+  delete args['data-json']
+
+curl_args = ''
+for key, arg of args
+  continue  if key in ['$0', '_']
+  if arg is true
+    curl_args += " -#{format_arg_key key}"
+  else if Array.isArray(arg)
+    for arg_key, arg_prop in arg
+      curl_args += " -#{format_arg_key key} #{format_arg arg_prop}"
+  else
+    curl_args += " -#{format_arg_key key} #{format_arg arg}"
+
+exec_command = "curl -# #{curl_args}"
+console.log exec_command
+exec exec_command, (err, stdout, stderr) ->
+  if stderr
+    return console.log stderr
+  console.log stdout
